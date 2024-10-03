@@ -2,7 +2,10 @@
 
 A simplified React component used in **slat.cc** that visualizes audio playback with a customizable shadow effect. It leverages the Web Audio API to analyze audio data and create a visual representation based on the audio's frequency data.
 
+https://github.com/user-attachments/assets/10f07909-aad0-4a3a-a4ec-d7f94307b3fc
+
 ## Getting Started
+
 
 To get a local copy up and running, follow these steps.
 
