@@ -1,8 +1,12 @@
 import urlMetadata from "url-metadata";
 
-export function isValidURL(url: string) {
-  const urlRegex = /^(?:https?):\/\/[\w-]+(?:\.[\w-]+)+[\w.,@?^=%&:/~+#-]*$/;
-  return urlRegex.test(url);
+function isValidURL(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 interface FavIcon {
@@ -12,7 +16,7 @@ interface FavIcon {
   sizes: string;
 }
 
-interface MetaData {
+interface MetadataResponse {
   requestUrl: string;
   url: string;
   title: string;
@@ -41,14 +45,12 @@ function getLargestFavicon(favicons: FavIcon[]) {
 }
 
 export async function scrapeMetadata(url: string) {
-  if (!isValidURL(url)) {
-    return {};
-  }
+  if (!isValidURL(url)) return;
 
   try {
     const res = await urlMetadata(url);
 
-    const metadata = res as MetaData;
+    const metadata = res as MetadataResponse;
 
     const title =
       metadata["og:title"] || metadata["twitter:title"] || metadata.title;
@@ -64,6 +66,5 @@ export async function scrapeMetadata(url: string) {
     };
   } catch (e) {
     console.error(e);
-    return {};
   }
 }
