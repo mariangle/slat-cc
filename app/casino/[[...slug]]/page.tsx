@@ -3,17 +3,20 @@ import { notFound } from 'next/navigation'
 import { match } from 'ts-pattern'
 
 import { GameInterface } from '@/app/casino/_components/game-interface'
-import { DailyRewardGame } from '@/lib/casino/daily-reward/daily-reward-game'
-import { DiceRollGame } from '@/lib/casino/dice-roll/dice-roll-game'
-import { RangeRouletteGame } from '@/lib/casino/range-roulette/range-roulette-game'
-import { RockPaperScissorsGame } from '@/lib/casino/rock-paper-scissors/rock-paper-scissors-game'
-import { SlotMachineGame } from '@/lib/casino/slot-machine/slot-machine-game'
-import { SpinTheWheelGame } from '@/lib/casino/spin-the-wheel/spin-the-wheel-game'
+import { DailyRewardGame } from '@/lib/casino/games/daily-reward/daily-reward-game'
+import { DiceRollGame } from '@/lib/casino/games/dice-roll/dice-roll-game'
+import { RangeRouletteGame } from '@/lib/casino/games/range-roulette/range-roulette-game'
+import { RockPaperScissorsGame } from '@/lib/casino/games/rock-paper-scissors/rock-paper-scissors-game'
+import { SlotMachineGame } from '@/lib/casino/games/slot-machine/slot-machine-game'
+import { SpinTheWheelGame } from '@/lib/casino/games/spin-the-wheel/spin-the-wheel-game'
 
 import CasinoLobby from '@/app/casino/_components/casino-lobby-page'
-import { getCasinoUser } from '@/lib/casino/actions/get-casino-user'
-import { casinoGames } from '@/lib/casino/constants'
-import type { CasinoGame } from '@/lib/casino/types'
+import { casinoGames } from '@/lib/casino/games/constants'
+import { getDailyRewardStatus } from '@/lib/casino/games/daily-reward/queries/get-daily-reward-status'
+import { getMultiplierData } from '@/lib/casino/games/daily-reward/queries/get-multiplier-status'
+import { getCasinoUserById } from '@/lib/casino/queries/casino-user'
+import type { CasinoGame, CasinoGameProps } from '@/lib/casino/types'
+import { withSession } from '@/lib/server/guards'
 import { constructMetadata } from '@/lib/utils'
 
 interface Params {
@@ -39,9 +42,9 @@ export async function generateMetadata(props: { params: Promise<Params> }): Prom
   })
 }
 
-function getGameComponent(game: CasinoGame): React.ComponentType<{ game: CasinoGame; lastClaimedAt?: Date }> {
+function getGameComponent(game: CasinoGame): React.ComponentType<CasinoGameProps> {
   return match(game.slug)
-    .returnType<React.ComponentType<{ game: CasinoGame; lastClaimedAt?: Date }>>()
+    .returnType<React.ComponentType<CasinoGameProps>>()
     .with('daily-reward', () => DailyRewardGame)
     .with('dice-roll', () => DiceRollGame)
     .with('spin-the-wheel', () => SpinTheWheelGame)
@@ -51,8 +54,8 @@ function getGameComponent(game: CasinoGame): React.ComponentType<{ game: CasinoG
     .exhaustive()
 }
 
-export default async function CasinoPage(props: { params: Promise<Params> }) {
-  const { slug } = await props.params
+export default async function CasinoPage({ params }: { params: Promise<Params> }) {
+  const { slug } = await params
 
   if (!slug || slug.length === 0) {
     return <CasinoLobby />
@@ -64,16 +67,22 @@ export default async function CasinoPage(props: { params: Promise<Params> }) {
     return notFound()
   }
 
-  const user = await getCasinoUser()
+  const data = await withSession(async (userId) => {
+    const [casinoUser, dailyRewardStatus] = await Promise.all([getCasinoUserById(userId), getDailyRewardStatus(userId)])
+
+    const multiplierData = await getMultiplierData(userId, dailyRewardStatus?.streakCount ?? 0)
+
+    return { user: casinoUser, dailyRewardStatus, multiplierData }
+  })
+
+  const props: CasinoGameProps = {
+    game: casinoGame,
+    dailyRewardStatus: data?.dailyRewardStatus,
+    user: data?.user,
+    multiplierData: data?.multiplierData,
+  }
+
   const GameComponent = getGameComponent(casinoGame)
 
-  return (
-    <GameInterface
-      user={user}
-      name={casinoGame.name}
-      game={<GameComponent game={casinoGame} lastClaimedAt={user?.lastClaimedAt ?? undefined} />}
-      hue={casinoGame.hue}
-      hexColor={casinoGame.color}
-    />
-  )
+  return <GameInterface game={casinoGame} component={<GameComponent {...props} />} />
 }

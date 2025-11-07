@@ -1,7 +1,6 @@
-import { NavSidebar } from '@/components/layout/nav-sidebar'
+import { NavSidebar } from '@/app/dashboard/_components/nav-sidebar'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { constructMetadata } from '@/lib/utils'
-import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,11 +11,9 @@ export const metadata = constructMetadata({
 })
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const defaultOpen = (await cookies()).get('sidebar:state')?.value === 'true'
-
   return (
     <>
-      <SidebarProvider defaultOpen={defaultOpen}>
+      <SidebarProvider>
         <NavSidebar variant="sidebar" />
         <SidebarInset className="lg:h-svh lg:overflow-y-hidden">
           <div className="hidden h-[14px] w-full shrink-0 lg:block" />

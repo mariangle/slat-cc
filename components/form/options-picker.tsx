@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/command-list'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Icons } from '@/lib/constants/icons'
-import { getFontVariable, parseFont } from '@/lib/data/biolink/constants'
+import { getFontVariable, parseFont } from '@/lib/features/app'
 import { cn } from '@/lib/utils'
 import { injectFontVariable } from '@/lib/utils/inject-font-variable'
 

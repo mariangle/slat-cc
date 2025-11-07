@@ -15,7 +15,7 @@ type WebhookAuthorization = {
 }
 
 export interface SendPayload {
-  author?: Author
+  actor?: Actor
   title: string
   url?: string
   color?: number
@@ -28,10 +28,6 @@ export const webhooks: Record<string, WebhookAuthorization> = {
     id: '',
     token: '',
   },
-  dailyRewards: {
-    id: '',
-    token: '',
-  },
   casinoGame: {
     id: '',
     token: '',
@@ -40,15 +36,23 @@ export const webhooks: Record<string, WebhookAuthorization> = {
     id: '',
     token: '',
   },
-  questions: {
-    id: '',
-    token: '',
-  },
   registrations: {
     id: '',
     token: '',
   },
-  comments: {
+  warnings: {
+    id: '',
+    token: '',
+  },
+  uploads: {
+    id: '',
+    token: '',
+  },
+  giveaways: {
+    id: '',
+    token: '',
+  },
+  cron: {
     id: '',
     token: '',
   },

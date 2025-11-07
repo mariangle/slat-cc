@@ -59,7 +59,6 @@ Further down, you can explore the **the nearly complete folder structure** of th
 - server-side rendering (SSR)
 - static site genetation (SSG)
 - incremental static regeneration (ISR)
-- middleware-based routing - subdomains e.g. docs.slat.cc
 - react server components (RSC)
 - streaming / partial loading (suspense + loading.tsx)
 - dynamic routing with catch-all and optional segments

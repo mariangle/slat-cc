@@ -1,106 +1,122 @@
-import { Badge } from '@/components/ui/badge'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from '@/components/ui/command-list'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Icons } from '@/lib/constants/icons'
-import { textEffectOptions } from '@/lib/data/biolink/constants'
-import { cn } from '@/lib/utils'
-import * as React from 'react'
-import { FiEdit3 } from 'react-icons/fi'
+'use client'
 
-export function TextEffectPicker({
-  value,
-  onChange,
-  premium,
-  multiple,
-  children,
-}: {
-  value: string[]
-  onChange: (value: string[]) => void
+import { DisplayName } from '@/components/profile/core/display-name'
+import { ResponsiveModal } from '@/components/shared/responsive-modal'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Icons } from '@/lib/constants/icons'
+import { TextEffect, textEffectOptions } from '@/lib/features/app'
+import { NameEffectsLength } from '@/lib/features/enums'
+import * as React from 'react'
+
+type Props = {
+  value: string[] // selected effect ids
+  onChange: (v: string[]) => void
   premium: boolean
   multiple?: boolean
   children: React.ReactNode
-}) {
+}
+
+export function TextEffectPicker({ value, onChange, premium, multiple, children }: Props) {
   const [open, setOpen] = React.useState(false)
 
-  const options = multiple ? textEffectOptions : textEffectOptions.filter((opt) => opt.bio)
+  // Options: match your old filtering — only bio-capable when !multiple
+  const baseOptions = React.useMemo(() => {
+    return multiple ? textEffectOptions : textEffectOptions.filter((o) => o.bio)
+  }, [multiple])
 
-  const handleSelect = (effectValue: string) => {
-    const isSelected = value.includes(effectValue)
+  const isSelected = React.useCallback((id: string) => value.includes(id), [value])
 
-    if (multiple) {
-      if (!isSelected && value.length >= 3) return
-      const updated = isSelected ? value.filter((v) => v !== effectValue) : [...value, effectValue]
-      onChange(updated)
-    } else {
-      onChange(isSelected ? [] : [effectValue])
-    }
+  const toggle = React.useCallback(
+    (id: string) => {
+      const already = isSelected(id)
+      if (multiple) {
+        if (!already) {
+          if (value.length >= NameEffectsLength.Max) return
+          onChange([...value, id])
+        } else {
+          onChange(value.filter((v) => v !== id))
+        }
+      } else {
+        onChange(already ? [] : [id])
+      }
+    },
+    [multiple, value, onChange, isSelected],
+  )
+
+  const onClear = React.useCallback(() => onChange([]), [onChange])
+  const onConfirm = React.useCallback(() => setOpen(false), [])
+
+  const EffectTile: React.FC<{
+    id: TextEffect
+    label: string
+    premiumOnly?: boolean
+  }> = ({ id, label, premiumOnly }) => {
+    const locked = !!premiumOnly && !premium
+    const selected = isSelected(id)
+
+    return (
+      <Button
+        type="button"
+        onClick={() => !locked && toggle(id)}
+        disabled={locked}
+        variant={selected ? 'primary' : 'secondary'}
+        title={label}
+        aria-pressed={selected}
+        className="h-12"
+      >
+        <DisplayName
+          title={label}
+          className="text-center text-base leading-tight"
+          options={{ effects: [id], color: '#FFFFFF' }}
+        />
+      </Button>
+    )
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <ResponsiveModal
+      size="3xl"
+      open={open}
+      setOpen={setOpen}
+      title={multiple ? 'Choose Name Effects' : 'Choose Bio Effect'}
+      description={
+        multiple
+          ? 'Select up to 3 effects to apply to your display name. Note some effects may not be compatible together.'
+          : 'Select an effect to apply to your bio.'
+      }
+      icon={Icons.sparkles}
+      trigger={
         <button
           type="button"
           className="group border-foreground/20 bg-tertiary hover:border-foreground flex w-full items-center gap-2 rounded-lg border-2 border-dashed p-4 shadow-sm duration-300"
         >
           <Badge>
-            <FiEdit3 className="h-4 w-4" />
+            <Icons.pencil className="h-4 w-4" />
           </Badge>
           {children}
         </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[250px] overflow-y-auto p-0">
-        <Command>
-          <CommandInput placeholder="Search effects..." />
-          <CommandEmpty>No effects found.</CommandEmpty>
-          <CommandGroup>
-            <CommandList>
-              {options.map((effect, idx) => {
-                const isSelected = value.includes(effect.value)
-                const isLocked = !premium && effect.premium
-
-                return (
-                  <CommandItem
-                    key={idx}
-                    value={effect.value}
-                    onSelect={() => !isLocked && handleSelect(effect.value)}
-                    disabled={isLocked}
-                    className={cn('flex items-center justify-start gap-2', isLocked && 'opacity-50')}
-                  >
-                    {isLocked ? (
-                      <Icons.lock className="text-primary-800 h-3.5 w-3.5" />
-                    ) : (
-                      <Icons.check className={cn('h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')} />
-                    )}
-                    <span>{effect.label}</span>
-                  </CommandItem>
-                )
-              })}
-            </CommandList>
-          </CommandGroup>
-          {value.length > 0 && (
-            <>
-              <button
-                type="button"
-                onClick={() => onChange([])}
-                className="hover:bg-foreground/2.5 flex w-full items-center justify-start gap-2 border-t px-3 py-2 text-sm duration-200"
-              >
-                <Icons.trash className="text-destructive size-3.5" />
-                {multiple ? 'Clear all effects' : 'Remove effect'}
-              </button>
-              <CommandSeparator />
-            </>
-          )}
-        </Command>
-      </PopoverContent>
-    </Popover>
+      }
+      footer={
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-end">
+          <div className="flex w-full gap-2 md:w-auto">
+            {value.length > 0 && (
+              <Button type="button" variant="secondary" className="w-full md:w-auto" onClick={onClear}>
+                {multiple ? 'Clear all' : 'Remove effect'}
+              </Button>
+            )}
+            <Button onClick={onConfirm} className="w-full md:w-auto">
+              Confirm
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-2 gap-2 md:max-h-[340px] md:grid-cols-3 md:overflow-y-auto xl:grid-cols-4">
+        {baseOptions.map((opt) => (
+          <EffectTile key={opt.value} id={opt.value} label={opt.label} premiumOnly={!!opt.premium} />
+        ))}
+      </div>
+    </ResponsiveModal>
   )
 }

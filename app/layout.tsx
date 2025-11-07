@@ -1,14 +1,18 @@
 import RootProviders from '@/app/providers'
-import { WEBSITE } from '@/lib/config'
+import { APP_CONFIG } from '@/lib/config'
 import { cn } from '@/lib/utils'
-import type { Viewport } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import '../styles/css/globals.css'
 import '../styles/css/globals.scss'
 import '../styles/css/index.css'
 
 export const viewport: Viewport = {
-  themeColor: WEBSITE.themeColor,
+  themeColor: APP_CONFIG.themeColor,
+}
+
+export const metadata: Metadata = {
+  metadataBase: new URL(APP_CONFIG.baseUrl),
 }
 
 const inter = Inter({

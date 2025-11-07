@@ -1,32 +1,20 @@
-import { AudioSource } from '@/components/biolink/audio-source'
-import { BiolinkPageProvider } from '@/components/biolink/biolink-page-provider'
-import { BiolinkPageWrapper } from '@/components/biolink/biolink-page-wrapper'
-import { Comment } from '@/components/biolink/comments/comment'
-import { CommentListCompact } from '@/components/biolink/comments/comment-list-compact'
-import { CursorTrail } from '@/components/biolink/cursor-trails/cursor-trail'
-import { Embed } from '@/components/biolink/embeds/embed'
-import { SocialLink } from '@/components/biolink/link'
-import { Overlay } from '@/components/biolink/overlay'
-import { PageTransition } from '@/components/biolink/page-transition'
-import { ProfileCard } from '@/components/biolink/profile-card'
-import { MusicPlayer } from '@/components/biolink/tracks/track-music-player'
-import { Views } from '@/components/biolink/views'
-import { getUserId } from '@/lib/auth/session'
-import { ONE_HOUR_IN_SECONDS } from '@/lib/constants/revalidates'
-import { getViewsCount } from '@/lib/data/actions/get-views-count'
-import { getBadges } from '@/lib/data/badges/actions'
-import { getBiolink } from '@/lib/data/biolink/actions/get-biolink'
-import type { Biolink } from '@/lib/data/biolink/schemas'
-import { getComments } from '@/lib/data/comments/actions'
-import { getEmbeds } from '@/lib/data/embeds/actions'
-import { getLinks } from '@/lib/data/links/actions'
-import { getTracks } from '@/lib/data/tracks/actions'
-import { getUserIdByUsername } from '@/lib/data/users/actions'
-import { getCacheKey } from '@/lib/data/utils'
+import { AudioSource } from '@/components/profile/audio-source'
+import { CommentListModal } from '@/components/profile/comments/comment-list-modal'
+import { CursorTrail } from '@/components/profile/cursor-trails/cursor-trail'
+import { Overlay } from '@/components/profile/overlay'
+import { ProfilePageContent } from '@/components/profile/profile-page-content'
+import { ProfilePageProvider } from '@/components/profile/profile-page-provider'
+import { Views } from '@/components/profile/views'
+import { getSessionUserId } from '@/lib/auth/session'
+import { getComments } from '@/lib/features/comments/queries'
+import type { Config } from '@/lib/features/config/schemas'
+import { getProfile } from '@/lib/features/profile/queries'
+import { getViewsCount } from '@/lib/features/profile/queries/views'
+import { Profile } from '@/lib/features/profile/schemas'
+import { getUserIdByUsername } from '@/lib/features/users/queries'
 import { Metadata, Viewport } from 'next'
-import { unstable_cache } from 'next/cache'
 import { notFound } from 'next/navigation'
-import { generateBiolinkMetadata } from './_actions/metadata'
+import { generateProfileMetadata } from './_actions/metadata'
 import { generateViewportMetadata } from './_actions/viewport'
 import { ClientViewTracker } from './_components/client-view-tracker'
 import { TemplatePreviewBanner } from './_components/template-preview-banner'
@@ -42,7 +30,7 @@ interface SearchParams {
 export async function generateMetadata(props: { params: Promise<Params> }): Promise<Metadata | undefined> {
   const { username } = await props.params
 
-  return await generateBiolinkMetadata(username)
+  return await generateProfileMetadata(username)
 }
 
 export async function generateViewport(props: { params: Promise<Params> }): Promise<Viewport> {
@@ -58,138 +46,53 @@ export default async function ProfilePage(props: { params: Promise<Params>; sear
   const templateId = rawTemplateId ? parseInt(rawTemplateId) : undefined
   const userId = await getUserIdByUsername(username)
 
-  if (!userId) {
-    notFound()
-  }
+  if (!userId) notFound()
 
-  const getCachedProfile = unstable_cache(
-    async (userId: number, templateId?: number) => {
-      const [biolink, embeds, tracks, badges, links] = await Promise.all([
-        getBiolink(userId, templateId),
-        getEmbeds(userId),
-        getTracks(userId),
-        getBadges(userId),
-        getLinks(userId),
-      ])
+  const profile = await getProfile(userId, { templateId })
 
-      return {
-        biolink,
-        embeds,
-        tracks,
-        badges,
-        links,
-      }
-    },
-    [getCacheKey({ userId, templateId })],
-    { revalidate: ONE_HOUR_IN_SECONDS }, // TODO: revalidate all needed
-  )
+  if (!profile) notFound()
 
-  const profile = await getCachedProfile(userId, templateId)
-
-  if (!profile.biolink) {
-    notFound()
-  }
-
-  const biolink = profile.biolink
-  const { enhancements, assets, revealScreen, comments, themeColor } = profile.biolink
-  const showRevealScreen = !!assets.video || !!assets.audio || revealScreen.persistent
-  const visitorId = comments.hidden ? undefined : await getUserId()
-  const audioSource = assets.audio || assets.background
-
-  const outsideProfileCardLinks = profile.links.filter((link) => link.style === 'card' && !link.hidden)
-  const outsideProfileCardEmbeds = profile.embeds.filter((embed) => !embed.insideProfileCard)
+  const config = profile.config
+  const { enhancements, media, enterScreen, comments, themeColor } = profile.config
+  const showEnterScreen = !!media.video || !!media.audio || enterScreen.persistent
+  const visitorId = comments.enabled ? await getSessionUserId() : undefined
+  const audioSource = media.audio || media.background
 
   return (
-    <BiolinkPageProvider biolink={biolink} className="relative min-h-svh w-full overflow-x-hidden">
-      <Overlay showRevealScreen={showRevealScreen} authenticated={!!visitorId} biolink={biolink} />
-      {audioSource && <AudioSource source={audioSource} biolink={biolink} />}
-      <BiolinkPageWrapper biolink={biolink}>
-        {enhancements.cursorTrail && (
-          <CursorTrail
-            color={themeColor}
-            trail={enhancements.cursorTrail}
-            className="pointer-events-none fixed inset-0 z-99 h-full w-full"
-          />
-        )}
-        {templateId && <TemplatePreviewBanner templateId={templateId} />}
-        <ClientViewTracker userId={userId} />
-        <PageTransition
-          suspense={showRevealScreen}
-          transition={enhancements.pageTransition}
-          duration={enhancements.pageTransitionDuration}
-        >
-          <ProfileCard
-            biolink={biolink}
-            badges={profile.badges}
-            links={profile.links}
-            views={<SuspenseViews biolink={biolink} />}
-            embeds={profile.embeds}
-          />
-          <>
-            {outsideProfileCardLinks.map((item) => (
-              <SocialLink key={item.id} item={item} biolink={biolink} />
-            ))}
-            {profile.tracks.length > 0 && (
-              <MusicPlayer
-                tracks={profile.tracks}
-                colors={{
-                  text: biolink.textColor,
-                  theme: biolink.themeColor,
-                  name: biolink.nameColor,
-                }}
-                card={biolink.card}
-                layout={biolink.layout.musicPlayer}
-              />
-            )}
-            {outsideProfileCardEmbeds.map((embed) => (
-              <Embed
-                key={embed.id}
-                embed={embed}
-                card={biolink.card}
-                container={biolink.container}
-                colors={{
-                  text: biolink.textColor,
-                  theme: biolink.themeColor,
-                  name: biolink.nameColor,
-                }}
-              />
-            ))}
-            {!comments.hidden && <SuspenseComments userId={userId} biolink={biolink} visitorId={visitorId} />}
-          </>
-        </PageTransition>
-      </BiolinkPageWrapper>
-    </BiolinkPageProvider>
+    <ProfilePageProvider config={config} className="relative min-h-svh w-full overflow-x-hidden">
+      <Overlay showEnterscreen={showEnterScreen} config={config} />
+      {comments.enabled && <SuspenseCommentsModal userId={userId} profile={profile} visitorId={visitorId} />}
+      <ClientViewTracker userId={userId} />
+      {audioSource && <AudioSource source={audioSource} config={config} />}
+      {enhancements.cursorTrail && (
+        <CursorTrail
+          color={themeColor}
+          trail={enhancements.cursorTrail}
+          className="pointer-events-none fixed inset-0 z-99 h-full w-full"
+        />
+      )}
+      {templateId && <TemplatePreviewBanner templateId={templateId} />}
+      <ProfilePageContent profile={profile} views={config.layout.showViews && <SuspenseViews config={config} />} />
+    </ProfilePageProvider>
   )
 }
 
-async function SuspenseViews({ biolink }: { biolink: Biolink }) {
-  const views = await getViewsCount({ biolinkId: biolink.id })
+async function SuspenseViews({ config }: { config: Config }) {
+  const views = await getViewsCount({ biolinkId: config.id })
 
-  return <Views views={views} biolink={biolink} />
+  return <Views views={views} config={config} />
 }
 
-async function SuspenseComments({
+async function SuspenseCommentsModal({
   userId,
-  biolink,
+  profile,
   visitorId,
 }: {
   userId: number
-  biolink: Biolink
+  profile: Profile
   visitorId?: number
 }) {
-  const comments = await getComments(userId)
+  const comments = await getComments({ userId, visitorId })
 
-  if (comments.length === 0) return null
-
-  return (
-    <>
-      {biolink.comments.compact ? (
-        <CommentListCompact comments={comments} biolink={biolink} visitorId={visitorId} />
-      ) : (
-        comments.map((comment) => (
-          <Comment key={comment.id} comment={comment} biolink={biolink} visitorId={visitorId} />
-        ))
-      )}
-    </>
-  )
+  return <CommentListModal comments={comments} profile={profile} visitorId={visitorId} />
 }

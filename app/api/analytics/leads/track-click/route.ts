@@ -1,34 +1,34 @@
-import { getClick } from '@/lib/analytics/clicks/actions/get-click'
-import { insertClick } from '@/lib/analytics/clicks/actions/insert-click'
 import { withLead } from '@/lib/api/middleware/lead'
-import { selectLinks } from '@/lib/data/links/actions'
-import { SlatServerError } from '@/lib/errors'
+import { db, schema } from '@/lib/drizzle'
+import { FedsServerError } from '@/lib/server/errors'
+import { and } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 
 /** POST /api/analytics/leads/track-click - Track a click for a link */
 export const POST = withLead(async ({ lead, target }) => {
-  const [link] = await selectLinks({ where: { id: target.id } })
+  const link = await db.query.links.findFirst({
+    where: (links, { eq }) => eq(links.id, target.id),
+  })
 
   if (!link) {
-    throw new SlatServerError({
+    throw new FedsServerError({
       code: 'not_found',
       message: 'Link not found',
     })
   }
 
-  const existingClick = await getClick({
-    ip: lead.ip,
-    linkId: link.id,
+  const existing = await db.query.clicks.findFirst({
+    where: (clicks, { eq }) => and(eq(clicks.ip, lead.ip), eq(clicks.linkId, link.id)),
   })
 
-  if (existingClick) {
-    throw new SlatServerError({
+  if (existing) {
+    throw new FedsServerError({
       code: 'conflict',
       message: 'Click already exists for this IP address and link',
     })
   }
 
-  await insertClick({
+  await db.insert(schema.clicks).values({
     ip: lead.ip,
     linkId: link.id,
     userId: link.userId,

@@ -1,6 +1,7 @@
 'use server'
 
-import { decrypt, encrypt } from '@/lib/jwt'
+import { decrypt, encrypt } from '@/lib/server/security/jwt'
+import { isProduction } from '@/lib/utils'
 import { addDays } from 'date-fns'
 import { cookies } from 'next/headers'
 import * as z from 'zod'
@@ -34,10 +35,11 @@ export async function createSession(args: CreateSessionArgs) {
 
   cookieStore.set(SESSION_COOKIE_NAME, session, {
     httpOnly: true,
-    secure: true,
+    secure: isProduction(),
     expires: expiresAt,
     sameSite: 'lax',
     path: '/',
+    ...(isProduction() && { domain: '.feds.lol' }),
   })
 }
 
@@ -54,17 +56,16 @@ const sessionSchema = z.object({
 
 export const verifySession = async (): Promise<z.infer<typeof sessionSchema> | undefined> => {
   const cookie = (await cookies()).get(SESSION_COOKIE_NAME)?.value
+
   const decoded = await decrypt(cookie)
 
   if (!decoded) return
 
   const parsed = decryptedSessionSchema.safeParse(decoded)
 
-  if (parsed.success) {
-    return { userId: parsed.data.userId }
-  }
+  if (!parsed.success) return
 
-  return undefined
+  return { userId: parsed.data.userId }
 }
 
 export async function deleteSession() {
@@ -72,24 +73,13 @@ export async function deleteSession() {
   cookieStore.delete(SESSION_COOKIE_NAME)
 }
 
-export async function getUserId(): Promise<number | undefined> {
+export async function getSessionUserId(): Promise<number | undefined> {
   const session = await verifySession()
   return session?.userId
 }
 
-/**
- * Wraps a function that requires a userId and returns the given fallback if userId cannot be resolved.
- */
-export async function withUserId<T>(
-  fn: (userId: number) => Promise<T>,
-  args: { userId?: number; fallback: () => T },
-): Promise<T> {
-  try {
-    const resolvedUserId = args.userId ?? (await getUserId())
-    if (!resolvedUserId) return args.fallback()
-    return await fn(resolvedUserId)
-  } catch (e) {
-    console.error('Error in withUserId:', e)
-    return args.fallback()
-  }
+export async function isAuthenticated(): Promise<boolean> {
+  const session = await verifySession()
+  return !!session
 }
+

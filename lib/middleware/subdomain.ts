@@ -2,7 +2,7 @@ import { parse } from '@/lib/api/parse'
 import { NextRequest, NextResponse } from 'next/server'
 
 export default async function SubdomainMiddleware(req: NextRequest) {
-  const { path, subdomain } = parse(req)
+  const { fullPath, subdomain } = parse(req)
 
   /** https://github.com/vercel/next.js/issues/75633 */
   if (req.method === 'OPTIONS') {
@@ -14,5 +14,5 @@ export default async function SubdomainMiddleware(req: NextRequest) {
     })
   }
 
-  return NextResponse.rewrite(new URL(`/${subdomain}${path === '/' ? '' : path}`, req.url))
+  return NextResponse.rewrite(new URL(`/${subdomain}.feds.lol${fullPath === '/' ? '' : fullPath}`, req.url))
 }

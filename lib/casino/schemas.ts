@@ -1,22 +1,42 @@
 import * as z from 'zod'
 
-export const outcomeSchema = z.enum(['win', 'lose', 'tie'])
+import type { CasinoUser } from '@/lib/features/users/types'
+
+export const outcomeSchema = z.enum(['win', 'lose', 'draw'])
 
 export type GameOutcome = z.infer<typeof outcomeSchema>
 
-export const casinoResponseSchema = z.object({
-  payout: z.number(),
+const baseMetaSchema = z.object({}).passthrough()
+
+const casinoResultSchema = z.object({
+  delta: z.number(),
+  grossPayout: z.number(),
   outcome: outcomeSchema,
-  balance: z.number(),
+  newBalance: z.number(),
+  meta: baseMetaSchema,
+  betAmount: z.number(),
 })
 
-export const casinoUserSchema = z.object({
+export type CasinoResult = z.infer<typeof casinoResultSchema>
+
+export const withMeta = <S extends z.ZodRawShape>(shape: S) =>
+  casinoResultSchema.extend({
+    meta: baseMetaSchema.extend(shape),
+  })
+
+export const casinoUserSchema: z.ZodType<CasinoUser> = z.object({
   id: z.number(),
   username: z.string(),
   coins: z.number(),
-  lastClaimedAt: z.date().optional(),
+  lastClaimedAt: z.date().nullable(),
 })
 
-export type CasinoUser = z.infer<typeof casinoUserSchema>
+export const casinoInputSchema = z.object({
+  betAmount: z.number().min(1, 'Bet amount must be at least 1.'),
+})
 
-export const betAmountSchema = z.number().min(1, 'Bet amount must be at least 1.')
+export const casinoPayloadSchema = z.object({
+  user: casinoUserSchema,
+})
+
+export type CasinoPayload = z.infer<typeof casinoPayloadSchema>

@@ -1,30 +1,35 @@
-import { withUser } from '@/lib/api/middleware/user'
+import { withCasinoUser } from '@/lib/api/middleware/user'
+import { enforceRateLimit } from '@/lib/api/rate-limit/enforce-rate-limit'
+import { CASINO_LIMITS } from '@/lib/api/rate-limit/limits'
 import { parseRequestBody } from '@/lib/api/utils'
-import { casinoGames } from '@/lib/casino/constants'
-import { handleDailyReward } from '@/lib/casino/daily-reward/daily-reward'
-import { DailyRewardPayload } from '@/lib/casino/daily-reward/schemas'
-import { handleDiceRoll } from '@/lib/casino/dice-roll/dice-roll'
-import { diceRollInputSchema, DiceRollPayload } from '@/lib/casino/dice-roll/schemas'
-import { handleRangeRoulette } from '@/lib/casino/range-roulette/range-roulette'
-import { rangeRouletteInputSchema, RangeRoulettePayload } from '@/lib/casino/range-roulette/schemas'
-import { handleRps } from '@/lib/casino/rock-paper-scissors/rock-paper-scissors'
-import { rpsInputSchema, RpsPayload } from '@/lib/casino/rock-paper-scissors/schemas'
-import { slotMachineInputSchema, SlotMachinePayload } from '@/lib/casino/slot-machine/schemas'
-import { handleSlotMachine } from '@/lib/casino/slot-machine/slot-machine'
-import { spinTheWheelInputSchema, SpinTheWheelPayload } from '@/lib/casino/spin-the-wheel/schemas'
-import { handleSpinTheWheel } from '@/lib/casino/spin-the-wheel/spin-the-wheel'
-import { SlatServerError } from '@/lib/errors'
+import { casinoGames } from '@/lib/casino/games/constants'
+import { handleDailyReward } from '@/lib/casino/games/daily-reward/daily-reward'
+import { DailyRewardPayload } from '@/lib/casino/games/daily-reward/schemas'
+import { handleDiceRoll } from '@/lib/casino/games/dice-roll/dice-roll'
+import { diceRollInputSchema, DiceRollPayload } from '@/lib/casino/games/dice-roll/schemas'
+import { handleRangeRoulette } from '@/lib/casino/games/range-roulette/range-roulette'
+import { rangeRouletteInputSchema, RangeRoulettePayload } from '@/lib/casino/games/range-roulette/schemas'
+import { handleRps } from '@/lib/casino/games/rock-paper-scissors/rock-paper-scissors'
+import { rpsInputSchema, RpsPayload } from '@/lib/casino/games/rock-paper-scissors/schemas'
+import { slotMachineInputSchema, SlotMachinePayload } from '@/lib/casino/games/slot-machine/schemas'
+import { handleSlotMachine } from '@/lib/casino/games/slot-machine/slot-machine'
+import { spinTheWheelInputSchema, SpinTheWheelPayload } from '@/lib/casino/games/spin-the-wheel/schemas'
+import { handleSpinTheWheel } from '@/lib/casino/games/spin-the-wheel/spin-the-wheel'
+import { notifyCasinoGameWebhook } from '@/lib/casino/webhook'
+import { FedsServerError } from '@/lib/server/errors'
 import { isUndefined } from 'lodash'
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { match } from 'ts-pattern'
 import * as z from 'zod'
 
+export const dynamic = 'force-dynamic'
+
 /** POST /api/casino/:slug - Handles various casino game actions based on the slug */
-export const POST = withUser(async ({ user, params, req }) => {
+export const POST = withCasinoUser()(async ({ user, params, req }) => {
   const { slug } = await params
 
   if (!slug || slug.length === 0) {
-    throw new SlatServerError({
+    throw new FedsServerError({
       code: 'bad_request',
       message: 'Invalid slug provided.',
     })
@@ -33,9 +38,16 @@ export const POST = withUser(async ({ user, params, req }) => {
   const game = casinoGames.find((g) => g.slug === slug[0])
 
   if (!game) {
-    throw new SlatServerError({
+    throw new FedsServerError({
       code: 'not_found',
       message: 'Game not found.',
+    })
+  }
+
+  if (process.env.CASINO_ENABLED !== 'true') {
+    throw new FedsServerError({
+      code: 'service_unavailable',
+      message: 'Casino services are currently disabled. Please try again later.',
     })
   }
 
@@ -43,9 +55,17 @@ export const POST = withUser(async ({ user, params, req }) => {
 
   try {
     data = await parseRequestBody(req)
-  } catch (error) {}
+  } catch (error) {
+    // daily reward doesn't require a body
+  }
 
-  const response = await match(game.slug)
+  const headers = await enforceRateLimit(user.id, {
+    namespace: 'casino',
+    source: `uid:${user.id}`,
+    limits: CASINO_LIMITS,
+  })
+
+  const result = await match(game.slug)
     .with('daily-reward', async () => {
       const payload: DailyRewardPayload = { user }
 
@@ -83,7 +103,22 @@ export const POST = withUser(async ({ user, params, req }) => {
     })
     .exhaustive()
 
-  return NextResponse.json(response)
+  after(async () => {
+    await notifyCasinoGameWebhook({
+      walletTransactionId: result.walletTransactionId,
+      gameId: game.id,
+      oldBalance: user.coins,
+      newBalance: result.newBalance,
+      betAmount: result.betAmount,
+      delta: result.delta,
+      actor: user,
+      meta: result.meta,
+    })
+  })
+
+  return NextResponse.json(result, {
+    headers: Object.fromEntries(headers.entries()),
+  })
 })
 
 function handleInputValidation<T extends z.ZodObject<any>>(schema: T, data: unknown, balance?: number): z.infer<T> {
@@ -98,14 +133,14 @@ function handleInputValidation<T extends z.ZodObject<any>>(schema: T, data: unkn
 
 function validateBetOrThrow(betAmount: number, balance: number) {
   if (betAmount <= 0) {
-    throw new SlatServerError({
+    throw new FedsServerError({
       message: 'Please enter a valid bet amount',
       code: 'bad_request',
     })
   }
 
   if (betAmount > balance) {
-    throw new SlatServerError({
+    throw new FedsServerError({
       message: "You don't have enough coins",
       code: 'bad_request',
     })

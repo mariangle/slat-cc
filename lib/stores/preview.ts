@@ -1,21 +1,19 @@
+import type { Profile } from '@/lib/features/profile/schemas'
 import { create } from 'zustand'
-import type { Biolink } from '@/lib/data/biolink/schemas'
 
-type BiolinkPreview = {
-  biolink?: Biolink
-  setBiolink: (values: Biolink) => void
+type ProfilePreview = {
+  profile?: Profile
+  setProfile: (values: Profile) => void
 }
 
-export const usePreview = create<BiolinkPreview>((set) => ({
-  biolink: undefined,
-  setBiolink: (values) => {
-    set((state) => {
-      return {
-        biolink: {
-          ...state.biolink,
-          ...values,
-        },
-      }
-    })
+export const useProfilePreview = create<ProfilePreview>((set) => ({
+  profile: undefined,
+  setProfile: (values) => {
+    set((state) => ({
+      profile: {
+        ...state.profile,
+        ...values,
+      },
+    }))
   },
 }))

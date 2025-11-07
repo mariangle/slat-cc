@@ -1,19 +1,19 @@
-import { SlatPasswordUpdatedEmail } from '@/components/email/slat-password-changed'
-import { SlatResetPasswordEmail } from '@/components/email/slat-reset-password-email'
-import { SlatWelcomeEmail } from '@/components/email/slat-welcome-email'
+import { FedsPasswordUpdatedEmail } from '@/components/email/feds-password-changed-email'
+import { FedsResetPasswordEmail } from '@/components/email/feds-reset-password-email'
+import { FedsWelcomeEmail } from '@/components/email/feds-welcome-email'
 import { render } from '@react-email/components'
 import { match } from 'ts-pattern'
 
-export type SlatEmailProps = {
+export type FedsEmailProps = {
   type: 'reset-password' | 'welcome' | 'password-changed'
   username: string
   token?: string
 }
 
-export async function renderEmailHtml({ ...props }: SlatEmailProps) {
+export async function renderEmailHtml({ ...props }: FedsEmailProps) {
   return match(props.type)
-    .with('reset-password', () => render(<SlatResetPasswordEmail {...props} />))
-    .with('welcome', () => render(<SlatWelcomeEmail />))
-    .with('password-changed', () => render(<SlatPasswordUpdatedEmail {...props} />))
+    .with('reset-password', () => render(<FedsResetPasswordEmail {...props} />))
+    .with('welcome', () => render(<FedsWelcomeEmail />))
+    .with('password-changed', () => render(<FedsPasswordUpdatedEmail {...props} />))
     .exhaustive()
 }

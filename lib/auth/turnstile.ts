@@ -1,4 +1,4 @@
-import { decrypt, encrypt } from '@/lib/jwt'
+import { decrypt, encrypt } from '@/lib/server/security/jwt'
 import { addMinutes } from 'date-fns'
 import { cookies } from 'next/headers'
 import 'server-only'

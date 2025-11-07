@@ -1,6 +1,6 @@
 import { Slider } from '@/components/ui/slider'
 
-import { PercentRange, Degree } from '@/lib/data/enums'
+import { Degree, PercentRange } from '@/lib/features/enums'
 import { match } from 'ts-pattern'
 
 type Unit = 'px' | '%' | 'deg' | 's'

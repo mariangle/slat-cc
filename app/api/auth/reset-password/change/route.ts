@@ -1,8 +1,9 @@
 import { parseRequestBody } from '@/lib/api/utils'
 import { deletePasswordResetByUserId, getPasswordReset } from '@/lib/auth/password-reset/actions'
-import { hashPassword } from '@/lib/bcrypt'
-import { selectUser, updateUser } from '@/lib/data/users/actions'
-import { handleAndReturnErrorResponse, SlatServerError } from '@/lib/errors'
+import { db } from '@/lib/drizzle'
+import { updateUser } from '@/lib/features/users/db'
+import { FedsServerError, handleAndReturnErrorResponse } from '@/lib/server/errors'
+import { hashPassword } from '@/lib/server/security/bcrypt'
 import { resetPasswordChangeFormSchema, ResetPasswordChangeFormValues } from '@/lib/zod/schemas/auth'
 import { isBefore } from 'date-fns'
 import { NextRequest, NextResponse } from 'next/server'
@@ -17,22 +18,30 @@ export async function POST(req: NextRequest) {
     const existingPasswordReset = await getPasswordReset({ token })
 
     if (!existingPasswordReset) {
-      throw new SlatServerError({
+      throw new FedsServerError({
         code: 'not_found',
         message: 'Invalid token',
       })
     }
 
     if (isBefore(existingPasswordReset.expiresAt, new Date())) {
-      throw new SlatServerError({
+      throw new FedsServerError({
         code: 'bad_request',
         message: 'Token expired',
       })
     }
-    const user = await selectUser({ where: { id: existingPasswordReset.userId }, select: ['id'] })
+
+    const user = await db.query.users.findFirst({
+      where: (users, { eq }) => eq(users.id, existingPasswordReset.userId),
+      columns: {
+        id: true,
+        email: true,
+        username: true,
+      },
+    })
 
     if (!user) {
-      throw new SlatServerError({
+      throw new FedsServerError({
         code: 'not_found',
         message: 'User not found',
       })
